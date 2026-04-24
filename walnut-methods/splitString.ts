@@ -5,7 +5,7 @@ import type { WalnutContext } from './walnut';
  * description: Split ${inputString} by delimiter ${delimiter} at index ${index} and store in $[result]
  * actionType: custom_split_string
  * context: shared
- * needsLocator: false
+ * needsLocator: false  
  * category: Data Processing
  */
 export async function splitString(ctx: WalnutContext) {
