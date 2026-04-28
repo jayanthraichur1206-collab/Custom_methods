@@ -2,7 +2,7 @@ import type { WalnutContext } from './walnut';
 
 /** @walnut_method
  * name: Get DOM Text and Store
- * description: Get DOM text from element ${selector} and store in $[result]
+ * description: Get DOM text from element ${selector} and store in $[text]
  * actionType: custom_get_dom_text_and_store
  * context: web
  * needsLocator: false
@@ -10,7 +10,7 @@ import type { WalnutContext } from './walnut';
  */
 export async function getDomTextAndStore(ctx: WalnutContext) {
   // ctx.args[0] = selector  (from ${selector} — CSS/XPath locator of the target element)
-  // ctx.args[1] = "result"  (from $[result]   — runtime variable name to store the text)
+  // ctx.args[1] = "text"    (from $[text]     — runtime variable name to store the text)
 
   const selector: string = ctx.args[0];
   const outputVar: string = ctx.args[1];
@@ -62,5 +62,5 @@ export async function getDomTextAndStore(ctx: WalnutContext) {
   // --- Store into runtime variable ---
   ctx.setVariable(outputVar, text);
 
-  ctx.log(`Stored into runtime variable $[${outputVar}]: "${text}"`);
+  ctx.log(`Stored into runtime variable $[text]: "${text}"`);  
 }
