@@ -9,24 +9,37 @@ import type { WalnutContext } from './walnut';
  * category: Query
  */
 export async function getTextAndStore(ctx: WalnutContext) {
-  // ctx.args[0] = selector  (from ${selector} — CSS/XPath of the target web element)
-  // ctx.args[1] = "result"  (from $[result]  — runtime variable name to store the text)
+  // ctx.args[0] = selector string  (from ${selector} — must be provided in test data)
+  // ctx.args[1] = "result"         (from $[result]   — runtime variable name)
 
   const selector: string = ctx.args[0];
   const outputVar: string = ctx.args[1];
 
-  // Use ctx.page to locate the element and read its DOM innerText
   const page = (ctx as any).page;
-  const locator = page.locator(selector).first();
 
-  // Wait for element to be present in the DOM before reading
-  await locator.waitFor({ state: 'attached' });
+  if (!selector || selector.trim() === '') {
+    throw new Error('selector is empty — provide a valid CSS or XPath selector in test data.');
+  }
 
-  const text: string = (await locator.innerText()).trim();
+  // Wait for the element to be visible in the DOM (timeout: 30s)
+  try {
+    await page.waitForSelector(selector, { state: 'visible', timeout: 30000 });
+  } catch {
+    throw new Error(`Element not found or not visible within 30s: "${selector}"`);
+  }
 
-  ctx.log(`Element: "${selector}"`);
-  ctx.log(`DOM innerText captured: "${text}"`);
+  // Read innerText directly from the DOM node
+  let text: string;
+  try {
+    text = await page.locator(selector).first().innerText({ timeout: 10000 });
+    text = text.trim();
+  } catch {
+    throw new Error(`Failed to retrieve text from element: "${selector}"`);
+  }
 
-  // Store captured text into the runtime variable
+  ctx.log(`Element   : "${selector}"`);
+  ctx.log(`DOM text  : "${text}"`);
+
+  // Store into runtime variable
   ctx.setVariable(outputVar, text);
 }
