@@ -2,7 +2,7 @@ import type { WalnutContext } from './walnut';
 
 /** @walnut_method
  * name: Split String by Delimiter
- * description: Split ${input} by delimiter ${delimiter} at index ${index} and store in $[result]
+ * description: Split ${input} by delimiter ${delimiter} at index ${index} and store in ${outputVar}
  * actionType: custom_split_string
  * context: shared
  * needsLocator: false
@@ -11,15 +11,15 @@ import type { WalnutContext } from './walnut';
 export async function splitString(ctx: WalnutContext) {
   // ctx.args[0] = input      (from ${input}     — the string to be split)
   // ctx.args[1] = delimiter  (from ${delimiter} — character or substring used to split)
-  // ctx.args[2] = index      (from ${index}     — position of the split result to retrieve)
-  // ctx.args[3] = "result"   (from $[result]    — runtime variable name to store the output)
+  // ctx.args[2] = index      (from ${index}     — zero-based position to retrieve)
+  // ctx.args[3] = outputVar  (from ${outputVar} — name of the runtime variable to store result)
 
   /**
    * Core reusable function that performs the split logic.
    * @param input     - The string to split
    * @param delimiter - The character or substring to split by
    * @param index     - The zero-based position of the part to retrieve
-   * @returns The retrieved part as a string, or an empty string on edge cases
+   * @returns The retrieved part as a string, or empty string on edge cases
    */
   function splitAndRetrieve(
     input: string | null | undefined,
@@ -55,7 +55,7 @@ export async function splitString(ctx: WalnutContext) {
       return '';
     }
 
-    // Retrieve and return the value at the specified index
+    // Retrieve and return the trimmed value at the specified index
     return parts[index].trim();
   }
 
@@ -72,11 +72,18 @@ export async function splitString(ctx: WalnutContext) {
     );
   }
 
+  // Validate outputVar is provided
+  if (!outputVar || outputVar.trim() === '') {
+    throw new Error('outputVar is empty — provide a variable name to store the result.');
+  }
+
   // Execute the reusable split function
   const result: string = splitAndRetrieve(input, delimiter, index);
 
   ctx.log(`Result    : "${result}"`);
 
-  // Store the result into the runtime variable
+  // Store the result into the named runtime variable
   ctx.setVariable(outputVar, result);
+
+  ctx.log(`Stored into runtime variable "${outputVar}": "${result}"`);
 }
