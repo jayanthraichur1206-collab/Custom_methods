@@ -2,17 +2,17 @@ import type { WalnutContext } from './walnut';
 
 /** @walnut_method
  * name: Split String by Delimiter
- * description: Split ${input} by delimiter ${delimiter} at index ${index} and store in ${outputVar}
+ * description: Split $[input] by delimiter ${delimiter} at index ${index} and store in $[outputVar]
  * actionType: custom_split_string
  * context: shared
  * needsLocator: false
  * category: Data Processing
  */
 export async function splitString(ctx: WalnutContext) {
-  // ctx.args[0] = input      (from ${input}     — the string to be split)
+  // ctx.args[0] = "input"    (from $[input]     — runtime variable name holding the string to split)
   // ctx.args[1] = delimiter  (from ${delimiter} — character or substring used to split)
   // ctx.args[2] = index      (from ${index}     — zero-based position to retrieve)
-  // ctx.args[3] = outputVar  (from ${outputVar} — name of the runtime variable to store result)
+  // ctx.args[3] = "outputVar"(from $[outputVar] — runtime variable name to store result)
 
   /**
    * Core reusable function that performs the split logic.
@@ -60,9 +60,9 @@ export async function splitString(ctx: WalnutContext) {
   }
 
   // --- Resolve args ---
-  const input: string = ctx.args[0];
+  const input: string = ctx.getVariable(ctx.args[0]);   // read runtime variable named by $[input]
   const delimiter: string = ctx.args[1];
-  const outputVar: string = ctx.args[3];
+  const outputVar: string = ctx.args[3];                 // variable name string from $[outputVar]
 
   // Validate index is a valid number
   const index: number = parseInt(ctx.args[2], 10);
