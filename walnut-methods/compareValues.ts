@@ -33,10 +33,10 @@ export async function compareValues(ctx: WalnutContext) {
   }
 
   // --- Strip ignored substrings from a value ---
-  // Supports comma-separated list of substrings to ignore (e.g. "$,USD, " or just "$")
+  // Supports pipe-separated list of substrings to ignore (e.g. "$|USD| " or just "$")
   function stripIgnored(value: string): string {
     if (!ignoreRaw) return value;
-    const tokens = ignoreRaw.split(',').map(t => t.trim()).filter(t => t !== '');
+    const tokens = ignoreRaw.split('|').map(t => t.trim()).filter(t => t !== '');
     let result = value;
     for (const token of tokens) {
       // Escape special regex characters in the token before building the pattern
