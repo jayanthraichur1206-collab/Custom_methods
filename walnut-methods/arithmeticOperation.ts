@@ -50,8 +50,8 @@ export async function arithmeticOperation(ctx: WalnutContext) {
   const operand2Str: string = resolveValue(operand2Raw, 2);
 
   // --- Parse operands as numbers ---
-  const operand1: number = parseFloat(operand1Str);
-  const operand2: number = parseFloat(operand2Str);
+  const operand1: number = parseFloat(operand1Str.replace(/,/g, ''));
+  const operand2: number = parseFloat(operand2Str.replace(/,/g, ''));
 
   if (isNaN(operand1)) {
     throw new Error(`operand1 "${operand1Str}" is not a valid number.`);

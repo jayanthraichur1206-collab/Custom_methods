@@ -2,7 +2,7 @@ import type { WalnutContext } from './walnut';
 
 /** @walnut_method
  * name: Compare Values
- * description: Compare $[param1] ${operator} ${param2} and store result in $[result]
+ * description: Compare $[param1] ${operator} ${param2} ignoring ${ignore} and store result in $[result]
  * actionType: custom_compare_values
  * context: shared
  * needsLocator: false
@@ -12,12 +12,14 @@ export async function compareValues(ctx: WalnutContext) {
   // ctx.args[0] = "param1"   (from $[param1]    — runtime variable name; value read via getVariable)
   // ctx.args[1] = operator   (from ${operator}  — comparison operator, e.g. "equals", "contains")
   // ctx.args[2] = param2     (from ${param2}    — local/test-data value to compare against)
-  // ctx.args[3] = "result"   (from $[result]    — runtime variable name to store TRUE or FALSE)
+  // ctx.args[3] = ignore     (from ${ignore}    — substring(s) to strip before comparing; leave blank to skip)
+  // ctx.args[4] = "result"   (from $[result]    — runtime variable name to store TRUE or FALSE)
 
   const param1VarName: string = ctx.args[0];
   const operator: string = ctx.args[1]?.trim().toLowerCase();
   const param2Raw: string = String(ctx.args[2] ?? '');
-  const resultVarName: string = ctx.args[3];
+  const ignoreRaw: string = String(ctx.args[3] ?? '').trim();
+  const resultVarName: string = ctx.args[4];
 
   // --- Resolve param1 from runtime variable ---
   const param1Raw = ctx.getVariable(param1VarName);
@@ -25,18 +27,37 @@ export async function compareValues(ctx: WalnutContext) {
     throw new Error(`Runtime variable $[${param1VarName}] is not set or has no value.`);
   }
 
-  // --- Normalize both values (trim + lowercase for case-insensitive comparison) ---
-  const param1: string = String(param1Raw).trim().toLowerCase();
-  const param2: string = param2Raw.trim().toLowerCase();
-
-  ctx.log(`param1 ($[${param1VarName}]) : "${String(param1Raw).trim()}"`);
-  ctx.log(`param2 (local)              : "${param2Raw.trim()}"`);
-  ctx.log(`operator                    : "${operator}"`);
-
   // --- Validate result variable name ---
   if (!resultVarName || resultVarName.trim() === '') {
     throw new Error('Result variable name is empty — provide a runtime variable name via $[result].');
   }
+
+  // --- Strip ignored substrings from a value ---
+  // Supports comma-separated list of substrings to ignore (e.g. "$,USD, " or just "$")
+  function stripIgnored(value: string): string {
+    if (!ignoreRaw) return value;
+    const tokens = ignoreRaw.split(',').map(t => t.trim()).filter(t => t !== '');
+    let result = value;
+    for (const token of tokens) {
+      // Escape special regex characters in the token before building the pattern
+      const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      result = result.replace(new RegExp(escaped, 'gi'), '');
+    }
+    return result;
+  }
+
+  // --- Normalize: strip ignored substrings, trim, lowercase ---
+  const param1: string = stripIgnored(String(param1Raw).trim()).trim().toLowerCase();
+  const param2: string = stripIgnored(param2Raw.trim()).trim().toLowerCase();
+
+  ctx.log(`param1 ($[${param1VarName}]) raw     : "${String(param1Raw).trim()}"`);
+  ctx.log(`param2 (local) raw               : "${param2Raw.trim()}"`);
+  if (ignoreRaw) {
+    ctx.log(`ignore                           : "${ignoreRaw}"`);
+    ctx.log(`param1 after strip               : "${param1}"`);
+    ctx.log(`param2 after strip               : "${param2}"`);
+  }
+  ctx.log(`operator                         : "${operator}"`);
 
   // --- Apply comparison ---
   let outcome: boolean;
