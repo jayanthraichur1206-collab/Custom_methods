@@ -2,7 +2,7 @@ import type { WalnutContext } from './walnut';
 
 /** @walnut_method
  * name: Compare Values
- * description: Compare $[param1] ${operator} ${param2} ignoring ${ignore} rounded to ${roundTo} decimals
+ * description: Compare $[param1] ${operator} $[param2] ignoring ${ignore} rounded to ${roundTo} decimals
  * actionType: custom_compare_values
  * context: shared
  * needsLocator: false
@@ -11,20 +11,25 @@ import type { WalnutContext } from './walnut';
 export async function compareValues(ctx: WalnutContext) {
   // ctx.args[0] = "param1"  (from $[param1]   — runtime variable name; value read via getVariable)
   // ctx.args[1] = operator  (from ${operator} — comparison operator, e.g. "equals", "contains")
-  // ctx.args[2] = param2    (from ${param2}   — local/test-data value to compare against)
+  // ctx.args[2] = "param2"  (from $[param2]   — runtime variable name; value read via getVariable)
   // ctx.args[3] = ignore    (from ${ignore}   — pipe-separated substrings to strip before comparing; leave blank to skip)
   // ctx.args[4] = roundTo   (from ${roundTo}  — number of decimal places to round to before comparing; leave blank to skip)
 
   const param1VarName: string = ctx.args[0];
   const operator: string = ctx.args[1]?.trim().toLowerCase();
-  const param2Raw: string = String(ctx.args[2] ?? '');
+  const param2VarName: string = ctx.args[2];
   const ignoreRaw: string = String(ctx.args[3] ?? '').trim();
   const roundToRaw: string = String(ctx.args[4] ?? '').trim();
 
-  // --- Resolve param1 from runtime variable ---
+  // --- Resolve both params from runtime variables ---
   const param1Raw = ctx.getVariable(param1VarName);
   if (param1Raw === null || param1Raw === undefined) {
     throw new Error(`Runtime variable $[${param1VarName}] is not set or has no value.`);
+  }
+
+  const param2Raw = ctx.getVariable(param2VarName);
+  if (param2Raw === null || param2Raw === undefined) {
+    throw new Error(`Runtime variable $[${param2VarName}] is not set or has no value.`);
   }
 
   // --- Strip pipe-separated substrings from a value before comparison ---
@@ -51,10 +56,10 @@ export async function compareValues(ctx: WalnutContext) {
 
   // --- Normalize: strip ignored substrings, trim, lowercase ---
   let param1: string = stripIgnored(String(param1Raw).trim()).trim().toLowerCase();
-  let param2: string = stripIgnored(param2Raw.trim()).trim().toLowerCase();
+  let param2: string = stripIgnored(String(param2Raw).trim()).trim().toLowerCase();
 
   ctx.log(`param1 ($[${param1VarName}]) raw : "${String(param1Raw).trim()}"`);
-  ctx.log(`param2 (local) raw           : "${param2Raw.trim()}"`);
+  ctx.log(`param2 ($[${param2VarName}]) raw : "${String(param2Raw).trim()}"`);
   if (ignoreRaw) {
     ctx.log(`ignore                       : "${ignoreRaw}"`);
     ctx.log(`param1 after strip           : "${param1}"`);
