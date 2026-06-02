@@ -4,7 +4,7 @@ import type { WalnutContext } from './walnut';
  * name: Build OFS Script
  * description: Build an OFS request string and store it in $[ofsScript]
  * actionType: custom_build_ofs_script
- * context: any
+ * context: web
  * needsLocator: false
  * category: Utility
  */
