@@ -70,12 +70,17 @@ export async function buildOfsScript(ctx: WalnutContext) {
   const applicationSection = `${applicationName},${version}/${func}/${processOrValidate}`;
   const credentialSection = `${username}/${password}/${company}`;
 
-  const ofsScript = [
-    applicationSection,
-    credentialSection,
-    txnId,
-    msgData
-  ].join(',');
+  const parts = [applicationSection, credentialSection];
+
+  if (txnId) {
+    parts.push(txnId);
+  }
+
+  if (msgData) {
+    parts.push(msgData);
+  }
+
+  const ofsScript = parts.join(',');
 
   ctx.log(`Generated OFS Script: ${ofsScript}`);
 
