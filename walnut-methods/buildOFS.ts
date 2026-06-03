@@ -67,20 +67,20 @@ export async function buildOfsScript(ctx: WalnutContext) {
     throw new Error('company is required.');
   }
 
-  const applicationSection = `${applicationName},${version}/${func}/${processOrValidate}`;
-  const credentialSection = `${username}/${password}/${company}`;
+  const applicationSection =
+    `${applicationName},${version}/${func}/${processOrValidate}`;
+  const credentialSection =
+    `${username}/${password}/${company}`;
 
-  const parts = [applicationSection, credentialSection];
-
-  if (txnId) {
-    parts.push(txnId);
-  }
-
-  if (msgData) {
-    parts.push(msgData);
-  }
-
-  const ofsScript = parts.join(',');
+  // Only include txnId and msgData when they have values
+  const ofsScript = [
+    applicationSection,
+    credentialSection,
+    txnId,
+    msgData
+  ]
+    .filter(value => value !== '')
+    .join(',');
 
   ctx.log(`Generated OFS Script: ${ofsScript}`);
 
