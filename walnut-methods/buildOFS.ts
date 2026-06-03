@@ -2,7 +2,7 @@ import type { WalnutContext } from './walnut';
 
 /** @walnut_method
  * name: Build OFS Script
- * description: Build an OFS request string and store it in $[ofsScript]
+ * description: Build an OFS request string using ${applicationName}, ${version}, ${function}, ${processOrValidate}, ${username}, ${password}, ${company}, ${txnId}, and ${msgData} and store it in $[ofsScript]
  * actionType: custom_build_ofs_script
  * context: web
  * needsLocator: false
