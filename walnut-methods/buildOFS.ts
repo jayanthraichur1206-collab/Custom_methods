@@ -73,15 +73,17 @@ export async function buildOfsScript(ctx: WalnutContext) {
     `${username}/${password}/${company}`;
 
   // Only include txnId and msgData when they have values
-  const ofsScript = [
-    applicationSection,
-    credentialSection,
-    txnId,
-    msgData
-  ]
-    .filter(value => value !== '')
-    .join(',');
+  let ofsScript =
+  `${applicationSection},${credentialSection}`;
 
+  if (txnId && msgData) {
+    ofsScript += `,${txnId},${msgData}`;
+  } else if (txnId) {
+    ofsScript += `,${txnId}`;
+  } else if (msgData) {
+    // preserve empty txnId position
+    ofsScript += `,,${msgData}`;
+  }
   ctx.log(`Generated OFS Script: ${ofsScript}`);
 
   ctx.setVariable(outputVar, ofsScript);
