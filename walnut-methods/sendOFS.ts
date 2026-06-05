@@ -3,7 +3,7 @@ import { Client } from 'ssh2';
 
 /** @walnut_method
  * name: Execute T24 SSH Command
- * description: Executes SSH login, sudo switch, and T24 commands on remote server
+ * description: Executes SSH login, sudo switch, T24 setup, tRun execution, and user query
  * actionType: custom_execute_ssh_t24
  * context: web
  * needsLocator: false
@@ -18,7 +18,7 @@ export async function executeSshT24(ctx: WalnutContext) {
   // [4] sudoPassword
   // [5] javaHome
   // [6] tafjBinPath
-  // [7] command
+  // [7] query
 
   const host = String(ctx.args[0] || '').trim();
   const sshUser = String(ctx.args[1] || '').trim();
@@ -27,14 +27,15 @@ export async function executeSshT24(ctx: WalnutContext) {
   const sudoPassword = String(ctx.args[4] || '').trim();
   const javaHome = String(ctx.args[5] || '').trim();
   const tafjBinPath = String(ctx.args[6] || '').trim();
-  const command = String(ctx.args[7] || '').trim();
+  const query = String(ctx.args[7] || '').trim();
 
   if (!host) throw new Error('host is required.');
   if (!sshUser) throw new Error('sshUser is required.');
   if (!sshPassword) throw new Error('sshPassword is required.');
   if (!sudoUser) throw new Error('sudoUser is required.');
+  if (!sudoPassword) throw new Error('sudoPassword is required.');
   if (!tafjBinPath) throw new Error('tafjBinPath is required.');
-  if (!command) throw new Error('command is required.');
+  if (!query) throw new Error('query is required.');
 
   const conn = new Client();
 
@@ -60,35 +61,40 @@ export async function executeSshT24(ctx: WalnutContext) {
 
         // ---------------- FLOW ----------------
 
-        // sudo switch
+        // 1. sudo switch
         stream.write(`sudo su - ${sudoUser}\n`);
 
         setTimeout(() => {
           stream.write(`${sudoPassword}\n`);
         }, 800);
 
-        // environment setup
+        // 2. set JAVA_HOME
         setTimeout(() => {
           if (javaHome) {
             stream.write(`export JAVA_HOME=${javaHome}\n`);
           }
         }, 1500);
 
-        // move directory
+        // 3. move to tafj bin path
         setTimeout(() => {
           stream.write(`cd ${tafjBinPath}\n`);
-        }, 2000);
+        }, 2200);
 
-        // execute command
+        // 4. run tRun
         setTimeout(() => {
-          stream.write(`${command}\n`);
-        }, 2500);
+          stream.write(`./tRun tSS TWS\n`);
+        }, 3000);
 
-        // exit session
+        // 5. run user query
+        setTimeout(() => {
+          stream.write(`${query}\n`);
+        }, 4500);
+
+        // 6. exit
         setTimeout(() => {
           stream.write(`exit\n`);
           stream.end();
-        }, 4000);
+        }, 7000);
       });
     });
 

@@ -2,86 +2,90 @@ import type { WalnutContext } from './walnut';
 
 /** @walnut_method
  * name: Concatenate Values
- * description: Concatenate ${value1} ${value2} ${value3} ${value4} ${value5} ${value6} ${value7} ${value8} ${value9} ${value10} and store in $[result]
+ * description: Concatenate ${values} and store in $[result]
  * actionType: custom_concatenate_values
  * context: shared
  * needsLocator: false
  * category: Data Processing
  */
 export async function concatenateValues(ctx: WalnutContext) {
-  // ctx.args layout (all are positional from the description placeholders):
-  //   args[0]  = value1   (from ${value1})
-  //   args[1]  = value2   (from ${value2})
-  //   ...
-  //   args[9]  = value10  (from ${value10})
-  //   args[10] = "result" (from $[result] — runtime variable name to store the concatenated string)
+  // ctx.args[0] = values   (from ${values} — comma-separated list of literals or variable names)
+  // ctx.args[1] = "result" (from $[result] — runtime variable name to store the concatenated string)
   //
   // HOW TO USE:
-  //   - Each ${valueN} slot accepts a raw literal string OR a runtime/global/local variable name.
-  //   - The method auto-detects: if getVariable(arg) returns a non-empty value, that stored value
-  //     is used; otherwise the raw text of the arg itself is used.
-  //   - Leave unused trailing slots blank (empty string) — they are automatically skipped.
-  //   - The last argument MUST be $[result] — the runtime variable name where the concatenated
-  //     string will be stored.
-  //   - No separator is added between values; include any desired separator as one of the value slots.
+  //   - Pass a comma-separated list of values in ${values}.
+  //   - Each item can be a plain literal OR any runtime/global/local variable name.
+  //   - The method auto-detects: if getVariable(item) returns a non-empty value, that stored value
+  //     is used; otherwise the raw item text itself is used as a literal.
+  //   - No separator is added between items — include one as an item if needed (e.g. " " or "-").
+  //   - The concatenated result is stored silently into the runtime variable named in $[result].
   //
   // EXAMPLES:
-  //   Concatenate "Hello" " " "World" → stores "Hello World"
-  //   Concatenate $[firstName] " " $[lastName] → resolves both runtime vars, stores e.g. "John Doe"
-  //   Concatenate $[baseUrl] "/api/v1/" $[endpoint] → stores e.g. "https://app.com/api/v1/users"
+  //   values = "Hello, ,World"           → result = "Hello World"
+  //   values = "firstName, ,lastName"    → resolves both runtime vars → result = "John Doe"
+  //   values = "baseUrl,/api/v1/,endpoint" → result = "https://app.com/api/v1/users"
+  //   values = "Order-,orderId,-2026"    → result = "Order-9871-2026"
 
-  // The last arg is always the output variable name (from $[result])
-  const outputVarName: string = ctx.args[ctx.args.length - 1];
+  const valuesRaw: string = ctx.args[0];
+  const outputVarName: string = ctx.args[1];
 
+  // --- Validate output variable name ---
   if (!outputVarName || outputVarName.trim() === '') {
     throw new Error(
-      'Output variable name is missing — the last placeholder must be $[result] ' +
+      'Output variable name is missing — the second placeholder must be $[result] ' +
       '(or any runtime variable name where the concatenated value will be stored).'
     );
   }
 
-  // All args except the last are input values
-  const inputArgs: string[] = ctx.args.slice(0, ctx.args.length - 1);
-
-  if (inputArgs.length === 0) {
-    throw new Error('No input values provided — add at least one ${value} placeholder before $[result].');
+  // --- Validate input ---
+  if (!valuesRaw || valuesRaw.trim() === '') {
+    throw new Error(
+      'No values provided — pass a comma-separated list of literals or variable names via ${values}.'
+    );
   }
 
   ctx.log(`Output variable : $[${outputVarName}]`);
-  ctx.log(`Input slots     : ${inputArgs.length}`);
+  ctx.log(`Raw input       : "${valuesRaw}"`);
+
+  // Split by comma — each token is either a literal or a variable name
+  const tokens: string[] = valuesRaw.split(',');
+
+  ctx.log(`Token count     : ${tokens.length}`);
 
   const resolvedParts: string[] = [];
 
-  for (let i = 0; i < inputArgs.length; i++) {
-    const raw: string = inputArgs[i];
+  for (let i = 0; i < tokens.length; i++) {
+    const token: string = tokens[i]; // preserve inner spaces (e.g. " " as separator)
 
-    // Skip completely empty/blank slots (unused placeholders left as empty string)
-    if (raw === null || raw === undefined || raw === '') {
-      ctx.log(`  [${i + 1}] (empty — skipped)`);
+    // Skip tokens that are completely empty (e.g. trailing comma)
+    if (token === null || token === undefined) {
+      ctx.log(`  [${i + 1}] (null — skipped)`);
       continue;
     }
 
+    const trimmed = token.trim();
+
     // Auto-detect: try to resolve as a runtime / global / local variable first
-    const fromVariable = ctx.getVariable(raw);
+    const fromVariable = ctx.getVariable(trimmed);
 
     let resolved: string;
     if (fromVariable !== null && fromVariable !== undefined && String(fromVariable).trim() !== '') {
       resolved = String(fromVariable);
-      ctx.log(`  [${i + 1}] "${raw}" → resolved from variable = "${resolved}"`);
+      ctx.log(`  [${i + 1}] "${trimmed}" → resolved from variable = "${resolved}"`);
     } else {
-      // Fall back to using the raw literal value (handles plain strings, numbers, separators, etc.)
-      resolved = String(raw);
-      ctx.log(`  [${i + 1}] "${raw}" → used as literal = "${resolved}"`);
+      // Use the raw token (preserves spaces used as separators, e.g. token = " ")
+      resolved = token;
+      ctx.log(`  [${i + 1}] "${token}" → used as literal`);
     }
 
     resolvedParts.push(resolved);
   }
 
   if (resolvedParts.length === 0) {
-    ctx.warn('All input slots were empty — storing an empty string in $[' + outputVarName + '].');
+    ctx.warn('All tokens were empty — storing an empty string in $[' + outputVarName + '].');
   }
 
-  // Concatenate all resolved parts (no separator — include one as a value slot if needed)
+  // Join without any extra separator — caller controls separators via token list
   const concatenated: string = resolvedParts.join('');
 
   ctx.log(`Concatenated result : "${concatenated}"`);
