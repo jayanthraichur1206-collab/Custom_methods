@@ -2,30 +2,27 @@ import type { WalnutContext } from './walnut';
 
 /** @walnut_method
  * name: Replace In String
- * description: In ${input} replace ${search} with ${replace} and store in $[output]
+ * description: In ${input} replace from index ${startIndex} to ${endIndex} with ${replacement} and store in $[output]
  * actionType: custom_replace_in_string
  * context: shared
  * needsLocator: false
  * category: Data Processing
  */
 export async function replaceInString(ctx: WalnutContext) {
-  // ctx.args[0] = input    (from ${input}   — the string to process; auto-detects runtime variable or raw value)
-  // ctx.args[1] = search   (from ${search}  — the substring to find and replace/remove)
-  // ctx.args[2] = replace  (from ${replace} — the value to replace with; leave blank to remove the search value)
-  // ctx.args[3] = "output" (from $[output]  — runtime variable name to store the result)
+  // ctx.args[0] = input       (from ${input}       — the string to process; auto-detects runtime variable or raw value)
+  // ctx.args[1] = startIndex  (from ${startIndex}  — zero-based start index of the substring to replace, inclusive)
+  // ctx.args[2] = endIndex    (from ${endIndex}    — zero-based end index of the substring to replace, exclusive)
+  // ctx.args[3] = replacement (from ${replacement} — the string to insert; may be empty to delete the range)
+  // ctx.args[4] = "output"    (from $[output]      — runtime variable name to store the result)
 
   const inputRaw: string = ctx.args[0];
-  const search: string = String(ctx.args[1] ?? '');
-  const replace: string = String(ctx.args[2] ?? '');
-  const outputVarName: string = ctx.args[3];
-
-  // --- Validate search value ---
-  if (!search || search.trim() === '') {
-    throw new Error('Search value is empty — provide a substring to search for via ${search}.');
-  }
+  const startIndex: number = Number(ctx.args[1]);
+  const endIndex: number = Number(ctx.args[2]);
+  const replacement: string = String(ctx.args[3] ?? '');
+  const outputVarName: string = ctx.args[4];
 
   // --- Validate output variable name ---
-  if (!outputVarName || outputVarName.trim() === '') {
+  if (!outputVarName || String(outputVarName).trim() === '') {
     throw new Error('Output variable name is empty — provide a runtime variable name via $[output].');
   }
 
@@ -40,21 +37,36 @@ export async function replaceInString(ctx: WalnutContext) {
     ctx.log(`input: using raw value "${input}"`);
   }
 
-  if (input.trim() === '') {
-    ctx.warn('Input string is empty — result will also be empty.');
+  // --- Validate indices ---
+  if (isNaN(startIndex) || !Number.isInteger(startIndex)) {
+    throw new Error(`startIndex "${ctx.args[1]}" is not a valid integer.`);
+  }
+  if (isNaN(endIndex) || !Number.isInteger(endIndex)) {
+    throw new Error(`endIndex "${ctx.args[2]}" is not a valid integer.`);
+  }
+  if (startIndex < 0) {
+    throw new Error(`startIndex (${startIndex}) must be >= 0.`);
+  }
+  if (endIndex < startIndex) {
+    throw new Error(`endIndex (${endIndex}) must be >= startIndex (${startIndex}).`);
+  }
+  if (startIndex > input.length) {
+    throw new Error(`startIndex (${startIndex}) exceeds input length (${input.length}).`);
   }
 
-  ctx.log(`search  : "${search}"`);
-  ctx.log(`replace : "${replace === '' ? '(blank — will remove search value)' : replace}"`);
+  // Clamp endIndex to input length
+  const clampedEnd = Math.min(endIndex, input.length);
 
-  // --- Escape special regex characters in the search string ---
-  const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  ctx.log(`input      : "${input}"`);
+  ctx.log(`startIndex : ${startIndex}`);
+  ctx.log(`endIndex   : ${clampedEnd} (requested: ${endIndex})`);
+  ctx.log(`replacement: "${replacement === '' ? '(empty — range will be deleted)' : replacement}"`);
 
-  // --- Replace all occurrences of search with replace (or remove if replace is blank) ---
-  const result: string = input.replace(new RegExp(escapedSearch, 'g'), replace);
+  // --- Perform index-based replacement using slice ---
+  const result: string =
+    input.slice(0, startIndex) + replacement + input.slice(clampedEnd);
 
-  ctx.log(`input   : "${input}"`);
-  ctx.log(`result  : "${result}"`);
+  ctx.log(`result     : "${result}"`);
 
   // --- Store result into runtime variable ---
   ctx.setVariable(outputVarName, result);
