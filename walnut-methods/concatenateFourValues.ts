@@ -20,15 +20,16 @@ export async function concatenateFourValues(ctx: WalnutContext) {
     );
   }
  
-  // Resolve a raw arg: try variable lookup unless the value is a plain literal
-  // (numeric/decimal/comma-formatted), which avoids treating ".00" as a variable name.
-  const isLiteral = (s: string): boolean =>
-    s.trim().length > 0 && /^[0-9,.\-\s$%]*$/.test(s.trim());
+  // Only resolve as a runtime variable when the token looks like a variable name (no spaces).
+  // "${valueN}" args are already resolved by the agent — literals like "CUSTOMER S " must not be looked up.
+  const looksLikeVarName = (s: string): boolean =>
+    /^[A-Za-z_][A-Za-z0-9_]*$/.test(s.trim());
  
   const resolve = (raw: string = ''): string => {
-    if (!raw.trim()) return raw;
-    if (isLiteral(raw)) return raw;
-    const fromVar = ctx.getVariable(raw.trim());
+    const trimmed = raw.trim();
+    if (!trimmed) return raw;
+    if (!looksLikeVarName(trimmed)) return raw;
+    const fromVar = ctx.getVariable(trimmed);
     return fromVar != null && String(fromVar).trim() !== '' ? String(fromVar) : raw;
   };
  
