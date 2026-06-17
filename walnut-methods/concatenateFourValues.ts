@@ -9,31 +9,43 @@ import type { WalnutContext } from './walnut';
 * category: Data Processing
 */
 export async function concatenateFourValues(ctx: WalnutContext) {
-  // ctx.args[0..4] = value1..value5 (from ${valueN})
-  // ctx.args[5]    = "CUSTOMER S"   (from $[CUSTOMER S] — runtime variable name to store the result)
+  // Agent passes ctx.args left-to-right from step_description placeholders:
+  //   ${name}  → resolved test-data VALUE (e.g. "-", ".00", "CUSTOMER S ")
+  //   $[name]  → runtime variable NAME only (e.g. "LC_Amuont_.00", "lc_amount_run")
+  //
+  // ctx.args[0..4] = up to 5 input parts
+  // ctx.args[5]    = output variable name (from final $[...])
  
-  const outputVarName: string = ctx.args[5];
+  const allArgs: string[] = ((ctx as any).args ?? []).map((a: unknown) => String(a ?? ''));
  
-  if (!outputVarName?.trim()) {
+  if (allArgs.length < 2) {
     throw new Error(
-      'Output variable name is missing — the sixth placeholder must be any runtime variable $[variable_name] where the concatenated value will be stored).'
+      'concatenateFourValues needs at least 2 arguments — one or more values plus $[outputVar] in the step description.'
     );
   }
  
-  // Only resolve as a runtime variable when the token looks like a variable name (no spaces).
-  // "${valueN}" args are already resolved by the agent — literals like "CUSTOMER S " must not be looked up.
-  const looksLikeVarName = (s: string): boolean =>
-    /^[A-Za-z_][A-Za-z0-9_]*$/.test(s.trim());
+  const outputVarName = allArgs[allArgs.length - 1]!.trim();
  
+  if (!outputVarName) {
+    throw new Error(
+      'Output variable name is missing — the last placeholder must be $[variable_name] where the concatenated value will be stored.'
+    );
+  }
+ 
+  const valueArgs = allArgs.slice(0, -1);
+ 
+  // "${valueN}" args are already resolved by the agent — use as literal if they contain spaces
+  // (e.g. "CUSTOMER S "). "$[var]" args are names only — resolve via getVariable, including
+  // names with dots (e.g. "LC_Amuont_.00").
   const resolve = (raw: string = ''): string => {
     const trimmed = raw.trim();
     if (!trimmed) return raw;
-    if (!looksLikeVarName(trimmed)) return raw;
+    if (/\s/.test(trimmed)) return raw;
     const fromVar = ctx.getVariable(trimmed);
     return fromVar != null && String(fromVar).trim() !== '' ? String(fromVar) : raw;
   };
  
-  const values = ctx.args.slice(0, 5).map(resolve);
+  const values = valueArgs.map(resolve);
   const concatenated = values.join('');
  
   ctx.log(`Output variable     : $[${outputVarName}]`);
