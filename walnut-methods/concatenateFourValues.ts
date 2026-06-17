@@ -41,6 +41,9 @@ export async function concatenateFourValues(ctx: WalnutContext) {
     const trimmed = raw.trim();
     if (!trimmed) return raw;
     if (/\s/.test(trimmed)) return raw;
+    // Only attempt variable lookup for valid identifier-like names (must start with a letter or _).
+    // Literal values like ".00", "10,000", "-" must NOT be looked up as variables.
+    if (!/^[a-zA-Z_]/.test(trimmed)) return raw;
     const fromVar = ctx.getVariable(trimmed);
     return fromVar != null && String(fromVar).trim() !== '' ? String(fromVar) : raw;
   };
