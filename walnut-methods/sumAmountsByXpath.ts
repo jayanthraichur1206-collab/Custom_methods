@@ -37,7 +37,9 @@ export async function sumAmountsByXpath(ctx: WalnutContext) {
     ctx.log(`[sumAmountsByXpath] Processing page ${pageNum}...`);
 
     // Read all matching amount elements on the current page
-    const amountLocator = page.locator(xpath);
+    // Playwright requires 'xpath=' prefix to treat the selector as XPath
+    const xpathSelector = xpath.startsWith('xpath=') ? xpath : `xpath=${xpath}`;
+    const amountLocator = page.locator(xpathSelector);
     const count = await amountLocator.count();
     ctx.log(`[sumAmountsByXpath] Found ${count} element(s) on page ${pageNum}`);
 
@@ -84,7 +86,8 @@ export async function sumAmountsByXpath(ctx: WalnutContext) {
     }
 
     // Check if the Next button is disabled — if so, we are on the last page
-    const nextBtn = page.locator(nextButtonXpath);
+    const nextBtnSelector = nextButtonXpath.startsWith('xpath=') ? nextButtonXpath : `xpath=${nextButtonXpath}`;
+    const nextBtn = page.locator(nextBtnSelector);
     const nextExists = await nextBtn.count();
 
     if (nextExists === 0) {
