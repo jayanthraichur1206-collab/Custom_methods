@@ -118,27 +118,41 @@ export async function sumAmountsByXpath(ctx: WalnutContext) {
 
     // Capture the text of the first amount cell before clicking, so we can
     // wait until it changes — confirming the table has loaded new data.
-    let firstCellTextBefore = '';
-    try {
-      firstCellTextBefore = (await amountLocator.first().textContent() ?? '').trim();
-    } catch { /* ignore — fallback to timeout */ }
+    // let firstCellTextBefore = '';
+    // try {
+    //   firstCellTextBefore = (await amountLocator.first().textContent() ?? '').trim();
+    // } catch { /* ignore — fallback to timeout */ }
+
+    // await nextBtn.click();
+
+    // // Wait until the first cell text changes (table refreshed) or 5s timeout
+    // try {
+    //   await page.waitForFunction(
+    //     ({ sel, prev }: { sel: string; prev: string }) => {
+    //       const el = document.evaluate(sel, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue as HTMLElement | null;
+    //       return el ? (el.textContent ?? '').trim() !== prev : false;
+    //     },
+    //     { sel: xpath, prev: firstCellTextBefore },
+    //     { timeout: 5000 }
+    //   );
+    // } catch {
+    //   // If wait times out (e.g. last page, or same value), fall back to a short pause
+    //   await page.waitForTimeout(500);
+    // }
 
     await nextBtn.click();
 
-    // Wait until the first cell text changes (table refreshed) or 5s timeout
-    try {
-      await page.waitForFunction(
-        ({ sel, prev }: { sel: string; prev: string }) => {
-          const el = document.evaluate(sel, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue as HTMLElement | null;
-          return el ? (el.textContent ?? '').trim() !== prev : false;
-        },
-        { sel: xpath, prev: firstCellTextBefore },
-        { timeout: 5000 }
-      );
-    } catch {
-      // If wait times out (e.g. last page, or same value), fall back to a short pause
-      await page.waitForTimeout(500);
-    }
+// Wait until Angular updates the table
+await page.waitForLoadState('networkidle').catch(() => {});
+
+// Wait for the table to detach and re-render
+await page.waitForTimeout(1000);
+
+// Wait until at least one amount cell is visible
+await page.locator(xpathSelector).first().waitFor({
+  state: 'visible',
+  timeout: 10000
+});
 
     pageNum++;
   }
