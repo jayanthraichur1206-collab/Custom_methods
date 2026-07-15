@@ -1,14 +1,14 @@
 import type { WalnutContext } from './walnut';
 
 /** @walnut_method
- * name: Replace In String
+ * name: Replace Matching Substring
  * description: In ${input} replace ${substring} with ${replacement} and store in $[output]
- * actionType: custom_replace_in_string
+ * actionType: custom_replace_matching_substring
  * context: shared
  * needsLocator: false
  * category: Data Processing
  */
-export async function replaceInString(ctx: WalnutContext) {
+export async function replaceMatchingSubstring(ctx: WalnutContext) {
   // ctx.args[0] = input       (from ${input}       — the source string; auto-detects runtime variable or raw value)
   // ctx.args[1] = substring   (from ${substring}   — the literal substring to find and replace; 1+ characters)
   // ctx.args[2] = replacement (from ${replacement} — the string to substitute in; may be empty to delete the match)
@@ -44,17 +44,18 @@ export async function replaceInString(ctx: WalnutContext) {
   ctx.log(`substring  : "${substring}"`);
   ctx.log(`replacement: "${replacement === '' ? '(empty — match will be deleted)' : replacement}"`);
 
-  // --- Perform substring replacement (replaces ALL occurrences) ---
+  // --- Count occurrences before replacement ---
   const escapedSubstring = substring.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const result: string = input.split(substring).join(replacement);
-
   const matchCount = (input.match(new RegExp(escapedSubstring, 'g')) || []).length;
 
   if (matchCount === 0) {
     ctx.warn(`substring "${substring}" was not found in the input — output is unchanged.`);
   } else {
-    ctx.log(`replaced ${matchCount} occurrence(s).`);
+    ctx.log(`found ${matchCount} occurrence(s) — replacing all.`);
   }
+
+  // --- Perform substring replacement (replaces ALL occurrences) ---
+  const result: string = input.split(substring).join(replacement);
 
   ctx.log(`result     : "${result}"`);
 
