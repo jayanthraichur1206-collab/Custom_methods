@@ -9,9 +9,9 @@ import type { WalnutContext } from './walnut';
  * category: Query
  */
 export async function getShadowDomAttributeByXpath(ctx: WalnutContext) {
-  // ctx.args[0] = xpath       (from ${xpath}      — XPath expression targeting the element, e.g. //my-component[@id='x'])
-  // ctx.args[1] = attribute   (from ${attribute} — attribute name to read, e.g. "data-status", "href", "value")
-  // ctx.args[2] = "result"    (from $[result]    — runtime variable name to store the retrieved attribute value)
+  // ctx.args[0] = xpath       (from ${xpath}     — XPath expression, e.g. //input[@title="user name field"])
+  // ctx.args[1] = attribute   (from ${attribute} — attribute name to read, e.g. "placeholder", "value", "href")
+  // ctx.args[2] = "result"    (from $[result]    — runtime variable name to store the retrieved value)
 
   const xpath: string = ctx.args[0];
   const attribute: string = ctx.args[1];
@@ -29,79 +29,104 @@ export async function getShadowDomAttributeByXpath(ctx: WalnutContext) {
 
   ctx.log(`[getShadowDomAttributeByXpath] xpath="${xpath}" attribute="${attribute}" outputVar="${outputVar}"`);
 
-  // Run in the browser: recursively walk all shadow roots, evaluate the XPath to
-  // find the target element, then read the specified attribute by name.
-  const result: string = await (ctx as any).evaluate(`
+  // Values are inlined via JSON.stringify — the browser receives plain ES5 JS, no TypeScript.
+  //
+  // WHY XPath fails on Shadow DOM:
+  //   document.evaluate() cannot pierce shadow roots — browser restriction.
+  //
+  // APPROACH: Convert XPath to a CSS selector using plain string operations (no regex),
+  // then use el.matches() which works perfectly on elements inside any shadow root.
+  //
+  // Example:  //input[@title="user name field"]
+  //   step 1  strip leading // or .//  → input[@title="user name field"]
+  //   step 2  extract tag              → "input"
+  //   step 3  extract [@k="v"] pairs  → [title="user name field"]
+  //   step 4  CSS selector             → input[title="user name field"]
+
+  const result: unknown = await (ctx as any).evaluate(`
     (() => {
-      const xpathExpr   = ${JSON.stringify(xpath)};
-      const attrName    = ${JSON.stringify(attribute)};
+      var xpathExpr = ${JSON.stringify(xpath)};
+      var attrName  = ${JSON.stringify(attribute)};
 
-      // Recursively collect every shadow root reachable from the given root.
-      function collectRoots(root) {
-        const roots = [root];
-        const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
-        let node;
-        while ((node = walker.nextNode())) {
-          if (node.shadowRoot) {
-            roots.push(...collectRoots(node.shadowRoot));
+      // ── Step 1: strip leading // or .//  ────────────────────────────────────
+      var expr = xpathExpr;
+      if (expr.indexOf('.//') === 0) { expr = expr.slice(3); }
+      else if (expr.indexOf('//') === 0) { expr = expr.slice(2); }
+
+      // ── Step 2: extract tag name (everything before first '[') ───────────────
+      var bracketPos = expr.indexOf('[');
+      var tag = (bracketPos === -1) ? expr : expr.slice(0, bracketPos);
+      var predicates = (bracketPos === -1) ? '' : expr.slice(bracketPos);
+
+      // ── Step 3: parse [@key="value"] predicates with plain string split ───────
+      // predicates looks like:  [@title="user name field"][@id="x"]
+      var cssParts = '';
+      var remaining = predicates;
+      while (remaining.length > 0) {
+        var open = remaining.indexOf('[@');
+        if (open === -1) break;
+        var close = remaining.indexOf(']', open);
+        if (close === -1) break;
+        var inner = remaining.slice(open + 2, close); // e.g.  title="user name field"
+        var eqPos = inner.indexOf('=');
+        if (eqPos !== -1) {
+          var k = inner.slice(0, eqPos);
+          var v = inner.slice(eqPos + 1);
+          // strip surrounding quotes
+          if ((v.charAt(0) === '"' && v.charAt(v.length - 1) === '"') ||
+              (v.charAt(0) === "'" && v.charAt(v.length - 1) === "'")) {
+            v = v.slice(1, v.length - 1);
           }
+          cssParts += '[' + k + '="' + v + '"]';
         }
-        return roots;
+        remaining = remaining.slice(close + 1);
       }
 
-      const searchRoots = collectRoots(document);
+      var cssSelector = (tag === '*' ? '' : tag) + cssParts;
+      if (!cssSelector) cssSelector = '*';
 
-      for (const searchRoot of searchRoots) {
+      // ── Step 4: collect every element across all shadow roots ─────────────────
+      // querySelectorAll('*') works correctly inside a shadow root;
+      // document.createTreeWalker and XPath do NOT.
+      function collectAll(root) {
+        var list = [];
         try {
-          const nodeResult = document.evaluate(
-            xpathExpr,
-            searchRoot,
-            null,
-            XPathResult.FIRST_ORDERED_NODE_TYPE,
-            null
-          );
-          const node = nodeResult.singleNodeValue;
-          if (node) {
-            // Element node — read attribute by name
-            if (node.nodeType === Node.ELEMENT_NODE) {
-              const val = node.getAttribute(attrName);
-              if (val !== null) return val;
-            }
-            // Attribute node selected directly (e.g. xpath ends with /@attr)
-            if (node.nodeType === Node.ATTRIBUTE_NODE) {
-              return node.nodeValue ?? '';
+          var els = root.querySelectorAll('*');
+          for (var i = 0; i < els.length; i++) {
+            list.push(els[i]);
+            if (els[i].shadowRoot) {
+              var inner = collectAll(els[i].shadowRoot);
+              for (var j = 0; j < inner.length; j++) list.push(inner[j]);
             }
           }
-        } catch (_) {
-          // This shadow root does not contain a matching node — continue searching
-        }
+        } catch (e) {}
+        return list;
       }
 
-      // Nothing found in any shadow root
-      return '';
+      var all = collectAll(document);
+
+      // ── Step 5: find first matching element and return the attribute ──────────
+      for (var k = 0; k < all.length; k++) {
+        var el = all[k];
+        try {
+          if (el.matches(cssSelector) && el.hasAttribute(attrName)) {
+            return el.getAttribute(attrName);
+          }
+        } catch (e) {}
+      }
+
+      return null;
     })()
   `);
 
-  const resultStr = result === null || result === undefined ? '' : String(result).trim();
+  const value = (result === null || result === undefined) ? '' : String(result).trim();
 
-  if (!resultStr) {
-    ctx.warn(`[getShadowDomAttributeByXpath] Attribute "${attribute}" not found on element matching xpath="${xpath}" across all shadow roots.`);
+  if (result === null || result === undefined) {
+    ctx.warn(`[getShadowDomAttributeByXpath] No match for xpath="${xpath}" with attribute="${attribute}" across all shadow roots.`);
   } else {
-    ctx.log(`[getShadowDomAttributeByXpath] Found value: "${resultStr}"`);
+    ctx.log(`[getShadowDomAttributeByXpath] Found: "${value}"`);
   }
 
-  // ctx.setVariable(outputVar, resultStr);
-  // ctx.log(`Stored into runtime variable $[${outputVar}]: "${resultStr}"`);
-  ctx.log("===== Runtime Variable Debug =====");
-ctx.log(`Variable Name : ${outputVar}`);
-ctx.log(`Variable Value: "${resultStr}"`);
-
-try {
-    ctx.setVariable(outputVar, resultStr);
-    ctx.log(`SUCCESS: Stored runtime variable $[${outputVar}] = "${resultStr}"`);
-} catch (error: any) {
-    // WalnutContext does not define `error()`; use log() instead
-    ctx.log(`FAILED to store runtime variable: ${error?.message || error}`);
-    throw error;
-}
+  ctx.setVariable(outputVar, value);
+  ctx.log(`Stored into runtime variable $[${outputVar}]: "${value}"`);
 }
