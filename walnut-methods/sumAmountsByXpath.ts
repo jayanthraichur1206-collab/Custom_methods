@@ -30,9 +30,12 @@ export async function sumAmountsByXpath(ctx: WalnutContext) {
   const page = (ctx as any).page;
   if (!page) throw new Error('Web page not available for custom_sum_amounts_by_xpath');
 
-  let total = 0;
-  let pageNum = 1;
+  // let total = 0;
+  // let pageNum = 1;
 
+  let total = 0;
+let pageNum = 1;
+let maxDecimalPlaces = 0;
   while (true) {
     ctx.log(`[sumAmountsByXpath] Processing page ${pageNum}...`);
 
@@ -71,9 +74,18 @@ export async function sumAmountsByXpath(ctx: WalnutContext) {
         cleanText = cleanText.slice(1, -1);
       }
 
+      // cleanText = cleanText.replace(/,/g, '');
+
+      // const parsed = parseFloat(cleanText);
       cleanText = cleanText.replace(/,/g, '');
 
-      const parsed = parseFloat(cleanText);
+// Determine how many decimal places this value has
+const decimalPart = cleanText.split('.')[1];
+if (decimalPart) {
+  maxDecimalPlaces = Math.max(maxDecimalPlaces, decimalPart.length);
+}
+
+const parsed = parseFloat(cleanText);
 
       if (isNaN(parsed)) {
         ctx.warn(`[sumAmountsByXpath] Page ${pageNum} element [${i}] text "${rawText}" is not numeric — skipping.`);
@@ -157,10 +169,23 @@ await page.locator(xpathSelector).first().waitFor({
     pageNum++;
   }
 
-  // Round to 3 decimal places to avoid floating-point drift
-  const rounded = Math.round(total * 1000) / 1000;
+  // Round using the maximum decimal precision found in the input
+const factor = Math.pow(10, maxDecimalPlaces);
+const rounded = Math.round(total * factor) / factor;
 
-  ctx.log(`[sumAmountsByXpath] Grand total across ${pageNum} page(s) = ${rounded}`);
-  ctx.setVariable(outputVar, String(rounded));
-  ctx.log(`Stored into runtime variable $[${outputVar}]: "${rounded}"`);
+// Preserve trailing zeros
+const formattedTotal =
+  maxDecimalPlaces > 0
+    ? rounded.toFixed(maxDecimalPlaces)
+    : String(rounded);
+
+ctx.log(`[sumAmountsByXpath] Grand total across ${pageNum} page(s) = ${formattedTotal}`);
+ctx.setVariable(outputVar, formattedTotal);
+ctx.log(`Stored into runtime variable $[${outputVar}]: "${formattedTotal}"`);
+  // // Round to 3 decimal places to avoid floating-point drift
+  // const rounded = Math.round(total * 1000) / 1000;
+
+  // ctx.log(`[sumAmountsByXpath] Grand total across ${pageNum} page(s) = ${rounded}`);
+  // ctx.setVariable(outputVar, String(rounded));
+  // ctx.log(`Stored into runtime variable $[${outputVar}]: "${rounded}"`);
 }
