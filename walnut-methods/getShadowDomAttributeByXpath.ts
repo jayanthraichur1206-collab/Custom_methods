@@ -90,6 +90,18 @@ export async function getShadowDomAttributeByXpath(ctx: WalnutContext) {
     ctx.log(`[getShadowDomAttributeByXpath] Found value: "${resultStr}"`);
   }
 
-  ctx.setVariable(outputVar, resultStr);
-  ctx.log(`Stored into runtime variable $[${outputVar}]: "${resultStr}"`);
+  // ctx.setVariable(outputVar, resultStr);
+  // ctx.log(`Stored into runtime variable $[${outputVar}]: "${resultStr}"`);
+  ctx.log("===== Runtime Variable Debug =====");
+ctx.log(`Variable Name : ${outputVar}`);
+ctx.log(`Variable Value: "${resultStr}"`);
+
+try {
+    ctx.setVariable(outputVar, resultStr);
+    ctx.log(`SUCCESS: Stored runtime variable $[${outputVar}] = "${resultStr}"`);
+} catch (error: any) {
+    // WalnutContext does not define `error()`; use log() instead
+    ctx.log(`FAILED to store runtime variable: ${error?.message || error}`);
+    throw error;
+}
 }
