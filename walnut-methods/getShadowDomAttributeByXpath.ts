@@ -29,104 +29,87 @@ export async function getShadowDomAttributeByXpath(ctx: WalnutContext) {
 
   ctx.log(`[getShadowDomAttributeByXpath] xpath="${xpath}" attribute="${attribute}" outputVar="${outputVar}"`);
 
-  // Values are inlined via JSON.stringify — the browser receives plain ES5 JS, no TypeScript.
-  //
-  // WHY XPath fails on Shadow DOM:
-  //   document.evaluate() cannot pierce shadow roots — browser restriction.
-  //
-  // APPROACH: Convert XPath to a CSS selector using plain string operations (no regex),
-  // then use el.matches() which works perfectly on elements inside any shadow root.
-  //
-  // Example:  //input[@title="user name field"]
-  //   step 1  strip leading // or .//  → input[@title="user name field"]
-  //   step 2  extract tag              → "input"
-  //   step 3  extract [@k="v"] pairs  → [title="user name field"]
-  //   step 4  CSS selector             → input[title="user name field"]
-
-  const result: unknown = await (ctx as any).evaluate(`
+  const result: string = await (ctx as any).evaluate(`
     (() => {
-      var xpathExpr = ${JSON.stringify(xpath)};
-      var attrName  = ${JSON.stringify(attribute)};
+      const xpathExpr = ${JSON.stringify(xpath)};
+      const attrName  = ${JSON.stringify(attribute)};
 
-      // ── Step 1: strip leading // or .//  ────────────────────────────────────
-      var expr = xpathExpr;
-      if (expr.indexOf('.//') === 0) { expr = expr.slice(3); }
-      else if (expr.indexOf('//') === 0) { expr = expr.slice(2); }
+      // WHY self:: approach:
+      // document.evaluate() cannot use a ShadowRoot as a context node — it is a
+      // browser-level restriction; XPath simply cannot see into shadow DOM.
+      // Solution: collect every element from every shadow root via querySelectorAll
+      // (which DOES work inside shadow roots), then test each element individually
+      // with "self::" XPath so we only evaluate against a real Element node.
+      //
+      // //input[@title="x"]  →  self::input[@title="x"]
+      // .//input[@title="x"] →  self::input[@title="x"]
+      const selfExpr = xpathExpr.replace(/^\\.?\\/\\//, 'self::');
 
-      // ── Step 2: extract tag name (everything before first '[') ───────────────
-      var bracketPos = expr.indexOf('[');
-      var tag = (bracketPos === -1) ? expr : expr.slice(0, bracketPos);
-      var predicates = (bracketPos === -1) ? '' : expr.slice(bracketPos);
-
-      // ── Step 3: parse [@key="value"] predicates with plain string split ───────
-      // predicates looks like:  [@title="user name field"][@id="x"]
-      var cssParts = '';
-      var remaining = predicates;
-      while (remaining.length > 0) {
-        var open = remaining.indexOf('[@');
-        if (open === -1) break;
-        var close = remaining.indexOf(']', open);
-        if (close === -1) break;
-        var inner = remaining.slice(open + 2, close); // e.g.  title="user name field"
-        var eqPos = inner.indexOf('=');
-        if (eqPos !== -1) {
-          var k = inner.slice(0, eqPos);
-          var v = inner.slice(eqPos + 1);
-          // strip surrounding quotes
-          if ((v.charAt(0) === '"' && v.charAt(v.length - 1) === '"') ||
-              (v.charAt(0) === "'" && v.charAt(v.length - 1) === "'")) {
-            v = v.slice(1, v.length - 1);
-          }
-          cssParts += '[' + k + '="' + v + '"]';
-        }
-        remaining = remaining.slice(close + 1);
-      }
-
-      var cssSelector = (tag === '*' ? '' : tag) + cssParts;
-      if (!cssSelector) cssSelector = '*';
-
-      // ── Step 4: collect every element across all shadow roots ─────────────────
-      // querySelectorAll('*') works correctly inside a shadow root;
-      // document.createTreeWalker and XPath do NOT.
-      function collectAll(root) {
-        var list = [];
+      // Recursively collect every element from the document and all nested shadow roots.
+      // querySelectorAll('*') works correctly within a shadow root.
+      function collectAllElements(root) {
+        const elements = [];
         try {
-          var els = root.querySelectorAll('*');
-          for (var i = 0; i < els.length; i++) {
-            list.push(els[i]);
-            if (els[i].shadowRoot) {
-              var inner = collectAll(els[i].shadowRoot);
-              for (var j = 0; j < inner.length; j++) list.push(inner[j]);
+          const els = root.querySelectorAll('*');
+          for (const el of els) {
+            elements.push(el);
+            if (el.shadowRoot) {
+              elements.push(...collectAllElements(el.shadowRoot));
             }
           }
-        } catch (e) {}
-        return list;
+        } catch (_) {}
+        return elements;
       }
 
-      var all = collectAll(document);
+      const allElements = collectAllElements(document);
 
-      // ── Step 5: find first matching element and return the attribute ──────────
-      for (var k = 0; k < all.length; k++) {
-        var el = all[k];
+      for (const el of allElements) {
         try {
-          if (el.matches(cssSelector) && el.hasAttribute(attrName)) {
-            return el.getAttribute(attrName);
+          const testResult = document.evaluate(
+            selfExpr,
+            el,
+            null,
+            XPathResult.BOOLEAN_TYPE,
+            null
+          );
+          if (testResult.booleanValue) {
+            // const val = el.getAttribute(attrName);
+            // if (val !== null && val !== undefined) return val;
+            // Try HTML attribute first
+let val = el.getAttribute(attrName);
+
+if (val !== null && val !== undefined && val !== "") {
+    return String(val);
+}
+
+// Fallback to DOM property
+try {
+    const propVal = el[attrName];
+
+    if (propVal !== null && propVal !== undefined && propVal !== "") {
+        return String(propVal);
+    }
+} catch (_) {}
+
+// Nothing found
           }
-        } catch (e) {}
+        } catch (_) {
+          // element did not match or XPath error — continue
+        }
       }
 
-      return null;
+      return '';
     })()
   `);
 
-  const value = (result === null || result === undefined) ? '' : String(result).trim();
+  const resultStr = result === null || result === undefined ? '' : String(result).trim();
 
-  if (result === null || result === undefined) {
-    ctx.warn(`[getShadowDomAttributeByXpath] No match for xpath="${xpath}" with attribute="${attribute}" across all shadow roots.`);
+  if (!resultStr) {
+    ctx.warn(`[getShadowDomAttributeByXpath] Attribute "${attribute}" not found for xpath="${xpath}" across all shadow roots.`);
   } else {
-    ctx.log(`[getShadowDomAttributeByXpath] Found: "${value}"`);
+    ctx.log(`[getShadowDomAttributeByXpath] Found: "${resultStr}"`);
   }
 
-  ctx.setVariable(outputVar, value);
-  ctx.log(`Stored into runtime variable $[${outputVar}]: "${value}"`);
+  ctx.setVariable(outputVar, resultStr);
+  ctx.log(`Stored into runtime variable $[${outputVar}]: "${resultStr}"`);
 }
