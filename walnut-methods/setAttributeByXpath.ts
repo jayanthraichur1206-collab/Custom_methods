@@ -2,23 +2,23 @@ import type { WalnutContext } from './walnut';
 
 /** @walnut_method
  * name: Set Attribute by XPath
- * description: Set ${attribute} to ${value} on element located by XPath
+ * description: Set ${xpath} element ${attribute} attribute to ${value}
  * actionType: custom_set_attribute_by_xpath
  * context: web
- * needsLocator: true
+ * needsLocator: false
  * category: Forms
  */
 export async function setAttributeByXpath(ctx: WalnutContext) {
-  // ctx.locator  = XPath expression typed in the Locator field on the test step
-  // ctx.args[0]  = attribute name  (from ${attribute})
-  // ctx.args[1]  = value to set    (from ${value})
+  // ctx.args[0]  = XPath expression  (from ${xpath})
+  // ctx.args[1]  = attribute name    (from ${attribute})
+  // ctx.args[2]  = value to set      (from ${value})
 
-  const xpath: string = (ctx as any).locator;
-  const attribute: string = ctx.args[0];
-  const value: string = ctx.args[1];
+  const xpath: string     = ctx.args[0];
+  const attribute: string = ctx.args[1];
+  const value: string     = ctx.args[2];
 
   if (!xpath?.trim()) {
-    throw new Error('No XPath provided. Enter the XPath in the Locator field on the test step.');
+    throw new Error('No XPath provided. Step description must include ${xpath}.');
   }
   if (!attribute?.trim()) {
     throw new Error('No attribute name provided. Step description must include ${attribute}.');
